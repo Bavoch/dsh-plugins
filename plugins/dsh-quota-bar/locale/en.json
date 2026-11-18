@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Bottom status bar · remaining quota",
+    "description": "Adds a status bar at the bottom of the window showing each signed-in model account's remaining quota. Antigravity's Claude and Gemini allowances are shown separately, each with its five-hour and seven-day windows; the bar stays hidden when no account reports a reading."
+  }
+}

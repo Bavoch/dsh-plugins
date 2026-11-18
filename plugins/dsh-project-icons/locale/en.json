@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Project icons and trailing status",
+    "description": "Shows each sidebar session’s project icon and moves its status marker to the trailing edge, keeping timestamps and hover actions from crowding the row."
+  }
+}

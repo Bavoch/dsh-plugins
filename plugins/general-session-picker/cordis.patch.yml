@@ -1,0 +1,3 @@
+- insert:
+    - id: general-session-picker
+      name: '@local/general-session-picker'

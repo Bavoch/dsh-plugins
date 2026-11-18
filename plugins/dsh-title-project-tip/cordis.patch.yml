@@ -1,0 +1,3 @@
+- insert:
+    - id: title-project-tip
+      name: '@local/dsh-title-project-tip'

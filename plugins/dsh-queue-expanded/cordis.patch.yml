@@ -1,0 +1,3 @@
+- insert:
+    - id: queue-expanded
+      name: '@local/dsh-queue-expanded'

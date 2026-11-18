@@ -1,0 +1,3 @@
+- insert:
+    - id: running-prompt-status
+      name: '@local/dsh-running-prompt-status'

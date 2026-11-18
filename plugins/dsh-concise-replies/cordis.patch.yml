@@ -1,0 +1,3 @@
+- insert:
+    - id: concise-replies
+      name: '@local/dsh-concise-replies'

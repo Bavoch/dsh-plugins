@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Queued messages stay expanded",
+    "description": "A queue of several messages is never collapsed automatically; every queued message stays listed so each one can be reviewed, edited, or removed."
+  }
+}

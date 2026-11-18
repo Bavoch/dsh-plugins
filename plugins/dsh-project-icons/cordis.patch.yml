@@ -1,0 +1,3 @@
+- insert:
+    - id: project-icons
+      name: '@local/dsh-project-icons'
