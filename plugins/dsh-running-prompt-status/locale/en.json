@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Reading anchor with task status",
-    "description": "Makes native user messages full-width sticky task headings, preserving status, duration and copy actions without a duplicate title bar."
+    "description": "Read one conversation turn at a time and scroll to turn the page. Sticky headings show status and duration, with copy on hover."
   }
 }

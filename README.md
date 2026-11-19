@@ -8,7 +8,7 @@
 | `dsh-quota-bar` | 底部显示已登录账号的剩余额度 |
 | `dsh-project-icons` | 侧栏项目图标、会话状态靠右、标题悬停显示项目名和路径，侧栏可缩至 176 px |
 | `dsh-concise-replies` | 精炼的结果回复及输入框中的下一步建议 |
-| `dsh-running-prompt-status` | 固定当前阅读任务的标题、状态和用时 |
+| `dsh-running-prompt-status` | 对话按轮滚动翻页，当前轮标题显示状态和用时 |
 | `dsh-queue-expanded` | 展开排队中的消息 |
 
 ## 安装到另一台设备

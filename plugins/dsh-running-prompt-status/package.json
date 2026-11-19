@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-running-prompt-status",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -30,5 +30,5 @@
       ]
     }
   },
-  "description": "Turns native user messages into full-width sticky task headings with status and elapsed time."
+  "description": "Page through conversation turns by scrolling, with sticky headings that show status and duration."
 }
