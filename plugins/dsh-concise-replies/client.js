@@ -11,7 +11,7 @@ window.__ModuleLoader__.load({
       'max-tokens': 'limited', blocked: 'blocked',
     };
 
-    const HINT_STYLE = `
+    const STYLE = `
 [data-dsh-next-task-visible] [data-composer-placeholder] { visibility: hidden; }
 .dsh-nt-placeholder {
   position: absolute; inset: 4px 8px auto 14px; display: flex; align-items: baseline; gap: 10px;
@@ -20,7 +20,117 @@ window.__ModuleLoader__.load({
 .dsh-nt-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dsh-nt-key { flex: none; font-size: 11px; font-style: normal; opacity: .85; }
 [data-composer-input][data-composer-composing] ~ .dsh-nt-placeholder { visibility: hidden; }
+
+.dsh-plain-step {
+  margin: 0;
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.65;
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh-plain-step [data-step-tone="active"] { color: var(--dsw-alias-label-deep-diving); }
+.dsh-plain-step [data-step-tone="attention"] { color: var(--dsw-alias-state-warn-primary); }
+.dsh-plain-step [data-step-tone="error"] { color: var(--dsw-alias-state-error-primary); }
+.dsh-plain-step__action {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-deep-diving);
+  font: inherit;
+  cursor: pointer;
+}
+.dsh-plain-step__action:is(:hover, :focus-visible) { text-decoration: underline; }
+.dsh-plain-step__children { display: grid; gap: 4px; margin: 4px 0 0; padding-inline-start: 1.25em; }
+
+/* The native compact group title can include the live tool argument summary. */
+[data-step-process] {
+  --dsh-plain-group-title: "Work steps";
+}
+[data-step-process]:lang(zh) { --dsh-plain-group-title: "执行步骤"; }
+[data-step-process] button[data-process-activity] > :not(:has([data-step-process-icon])) { display: none; }
+[data-step-process] button[data-process-activity]::after { content: var(--dsh-plain-group-title); }
+[data-step-process] button[data-process-activity] [data-step-process-icon] { display: none; }
+[data-step-process] button[data-process-activity] [data-step-process-chevron] { opacity: 1; }
+[data-chat-flow-kind="turn-process"] [data-turn-process] { border-bottom: 0; }
+
+/* The reasoning disclosure has a native preview separate from its body slot. */
+[data-slot="conversation.chat.node"] [data-variant="think"] { display: none; }
+[data-slot="conversation.chat.node"] [data-variant="think"][data-state="running"] {
+  display: block;
+  color: var(--dsw-alias-label-deep-diving);
+  font-size: var(--dsh-content-font-size-secondary, 13px);
+  line-height: 1.65;
+}
+[data-slot="conversation.chat.node"] [data-variant="think"][data-state="running"] > * { display: none; }
+[data-slot="conversation.chat.node"] [data-variant="think"][data-state="running"]::before { content: "Reviewing the request"; }
+[data-slot="conversation.chat.node"] [data-variant="think"][data-state="running"]:lang(zh)::before { content: "正在梳理任务"; }
+
+[data-chat-flow-kind="assistant-step"] [data-slot="conversation.chat.node"] > div > div > span:last-child {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--dsw-alias-state-warn-primary);
+}
 `;
+
+    // Match only known names. Tool arguments, command descriptions, and output
+    // can all contain command text, including in errors and saved history.
+    const actions = new Map(Object.entries({
+      read: 'read', read_image: 'read', glob: 'find', grep: 'find',
+      web_search: 'research', web_fetch: 'research',
+      write: 'update', edit: 'update', apply_patch: 'update',
+      office_render: 'document', office_convert: 'document', office_recalculate: 'document',
+      subagent: 'delegate', subagent_fork: 'delegate', wait_agent: 'wait',
+      ask_user_question: 'question',
+    }));
+
+    function stepState(block) {
+      if (!('kind' in block)) return block.phase === 'preparing' ? 'preparing' : 'running';
+      if (block.error?.code === 'interrupted') return 'stopped';
+      return block.isError || block.meta?.stopped === true ? 'issue' : undefined;
+    }
+
+    function StepText({ state, children }) {
+      const tone = state === 'issue' ? 'error' : state === 'stopped' ? 'attention' : state ? 'active' : undefined;
+      return h('p', { className: 'dsh-plain-step' }, h('span', { 'data-step-tone': tone }, children));
+    }
+
+    function Operation({ block, canAnswer, showQuestion, t }) {
+      const name = 'kind' in block ? block.call?.name : block.name;
+      const state = stepState(block);
+      const action = actions.get(name) ?? 'work';
+      const label = canAnswer(block.callId)
+        ? h('button', {
+          type: 'button', className: 'dsh-plain-step__action', onClick: () => showQuestion(block.callId),
+        }, t('step.answer'))
+        : [t(`action.${action}`), state && t(`step.${state}`)].filter(Boolean).join(' · ');
+      return h('div', { 'data-chat-anchor-key': `call:${block.callId}`, 'data-chat-call-id': block.callId },
+        h(StepText, { state }, label),
+        block.subCalls?.length > 0 && h('ul', { className: 'dsh-plain-step__children' },
+          block.subCalls.map(child => h('li', { key: child.callId },
+            h(Operation, { block: child, canAnswer, showQuestion, t })))));
+    }
+
+    function WorkStep({ node, useProjection, showQuestion, t }) {
+      const questions = useProjection('userQuestions', view => view?.active);
+      return h(Operation, {
+        block: node.data.root,
+        canAnswer: id => questions?.some(question => question.callId === id) ?? false,
+        showQuestion,
+        t,
+      });
+    }
+
+    function RetryNotice({ node, t }) {
+      return node.data.current.retryState === 'scheduled'
+        ? h(StepText, { state: 'running' }, t('step.retry')) : null;
+    }
+
+    function SignInNotice({ node, t }) {
+      return node.data.code === 'ACCOUNT_SIGNED_OUT'
+        ? h(StepText, { state: 'issue' }, t('step.signIn')) : null;
+    }
+
+    const HideDetail = () => null;
 
     function NextTaskHint({ useChat, useSession, useInput, inputActions, useAccess, sessionId, t }) {
       const timeline = useChat(snapshot => snapshot.timeline);
@@ -159,22 +269,54 @@ window.__ModuleLoader__.load({
           const disposers = [];
           try {
             disposers.push(ctx.locale.register(NS, 'zh', {
-              stopped: '任务已停止，结果还没有最终确认，不能当作全部完成。停止前的操作可能已经生效。',
-              interrupted: '任务已中断，结果还没有最终确认，不能当作全部完成。中断前的操作可能已经生效。',
-              failed: '任务出错，没能正常结束，无法确认是否全部完成。出错前的操作可能已经生效。',
-              limited: '本轮达到处理上限，结果可能不完整，尚不能确认全部完成。',
-              blocked: '任务遇到阻碍，没能继续，尚不能确认全部完成。',
-              unknown: '本轮未能正常结束，尚不能确认是否全部完成。',
+              stopped: '任务已停止，结果尚未确认。此前的操作可能已生效。',
+              interrupted: '任务中断，结果尚未确认。此前的操作可能已生效。',
+              failed: '任务遇到问题，结果尚未确认。此前的操作可能已生效。',
+              limited: '本轮已达到回复上限，结果可能不完整。',
+              blocked: '任务暂时无法继续，结果尚未确认。',
+              unknown: '任务提前结束，结果尚未确认。',
+              'action.read': '查看资料',
+              'action.find': '查找相关内容',
+              'action.research': '查阅网上资料',
+              'action.update': '修改相关文件',
+              'action.document': '处理文档',
+              'action.delegate': '安排部分工作',
+              'action.wait': '等待其他步骤完成',
+              'action.question': '询问用户',
+              'action.work': '处理任务',
+              'step.preparing': '准备中',
+              'step.running': '进行中',
+              'step.stopped': '已停止',
+              'step.issue': '遇到问题',
+              'step.answer': '有问题需要你回答',
+              'step.retry': '暂时遇到问题，正在重试',
+              'step.signIn': '账号已退出，请重新登录后继续。',
               'nextTask.description': 'AI 建议的下一步任务',
               'nextTask.accept': 'Tab 采用',
             }));
             disposers.push(ctx.locale.register(NS, 'en', {
-              stopped: 'The task was stopped before its result was confirmed. Earlier actions may already have taken effect; completion is unconfirmed.',
-              interrupted: 'The task was interrupted before its result was confirmed. Earlier actions may already have taken effect; completion is unconfirmed.',
-              failed: 'The task ended with an error. Earlier actions may already have taken effect; completion is unconfirmed.',
-              limited: 'This turn reached its processing limit. The result may be incomplete; completion is unconfirmed.',
-              blocked: 'The task could not continue because it was blocked. Completion is unconfirmed.',
-              unknown: 'This turn did not end normally. Completion is unconfirmed.',
+              stopped: 'The task was stopped before the result was confirmed. Earlier changes may already be in effect.',
+              interrupted: 'The task was interrupted. Earlier changes may already be in effect.',
+              failed: 'The task ran into a problem. Earlier changes may already be in effect.',
+              limited: 'The reply reached its length limit. The result may be incomplete.',
+              blocked: 'The task could not continue. The result is unconfirmed.',
+              unknown: 'The task ended early. The result is unconfirmed.',
+              'action.read': 'Review materials',
+              'action.find': 'Look for relevant information',
+              'action.research': 'Consult online sources',
+              'action.update': 'Update files',
+              'action.document': 'Work on the document',
+              'action.delegate': 'Assign part of the work',
+              'action.wait': 'Wait for related work',
+              'action.question': 'Ask a question',
+              'action.work': 'Work on the task',
+              'step.preparing': 'Getting ready',
+              'step.running': 'In progress',
+              'step.stopped': 'Stopped',
+              'step.issue': 'Ran into a problem',
+              'step.answer': 'A question needs your answer',
+              'step.retry': 'Retrying after a temporary problem',
+              'step.signIn': 'Sign back in to continue.',
               'nextTask.description': 'AI-suggested next task',
               'nextTask.accept': 'Tab to use',
             }));
@@ -188,10 +330,29 @@ window.__ModuleLoader__.load({
         ctx.effect(() => {
           const style = document.createElement('style');
           style.dataset.plugin = '@local/dsh-concise-replies';
-          style.textContent = HINT_STYLE;
+          style.textContent = STYLE;
           document.head.append(style);
           return () => style.remove();
-        }, 'next-task: inline placeholder');
+        }, 'concise-replies: presentation styles');
+
+        ctx.slots.inject('conversation.chat.node', function* () {
+          const name = 'conversation.chat.node';
+          yield ctx.slots.register({
+            name, key: 'tool-call', priority: -1, locale: NS,
+            inject: sessionId => ({
+              showQuestion: callId => ctx.get('userQuestionPanels')?.reveal(sessionId, callId) ?? false,
+            }),
+          }, WorkStep);
+          yield ctx.slots.register({ name, key: 'model-retry', priority: -1, locale: NS }, RetryNotice);
+          yield ctx.slots.register({ name, key: 'turn-error', priority: -1, locale: NS }, SignInNotice);
+          for (const key of ['context', 'system-prompt', 'compaction', 'turn-max-tokens', 'unknown']) {
+            yield ctx.slots.register({ name, key, priority: -1 }, HideDetail);
+          }
+        });
+
+        ctx.slots.inject('conversation.chat.reasoning.body', () => ctx.slots.register({
+          name: 'conversation.chat.reasoning.body', priority: -1,
+        }, HideDetail));
 
         ctx.slots.inject('conversation.input.overlay', () => ctx.slots.register({
           name: 'conversation.input.overlay', id: 'concise-next-task', locale: NS,

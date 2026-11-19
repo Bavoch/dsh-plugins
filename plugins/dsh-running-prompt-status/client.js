@@ -10,11 +10,11 @@ window.__ModuleLoader__.load({
     const MESSAGE_SELECTOR = `[data-chat-flow-kind="user"][data-chat-turn], ${TRANSCRIPT_ECHO}`;
     const TURN_ROW = '[data-chat-flow-kind], [data-chat-group-key], [data-submission-echo], [data-pending-steering], [data-chat-running]';
     const TITLE_INSET = 8;
-    const IMAGE_ATTACHMENTS = '[data-message-attachments]:has([data-align])';
+    const IMAGE_ATTACHMENTS = '[data-message-attachments]';
     const TITLE_LAYOUT = '[data-dsh-task-title-layout]';
     const TITLE_BODY = '[data-dsh-task-title-body]';
     const TITLE_TRAILING = ':is([data-clock=start], [data-dsh-task-metadata])';
-    const IMAGE_LAYOUT = `${TITLE_LAYOUT}:has(> ${TITLE_BODY} > [data-message-attachments] [data-align])`;
+    const IMAGE_LAYOUT = `${TITLE_LAYOUT}:has(> ${TITLE_BODY} > [data-message-attachments])`;
     const IMAGE_TEXT_LAYOUT = `${IMAGE_LAYOUT}:has(> ${TITLE_BODY} > [data-message-bubble])`;
     const TITLE_WITH_ACTIONS = '[data-dsh-user-title]:is(:hover:not(:has([data-message-attachments]:hover)), :has([data-clock=start] :focus-visible))';
     const ACTIVE_TITLE_LAYOUT = `:is(${TITLE_WITH_ACTIONS}${TITLE_LAYOUT}, ${TITLE_WITH_ACTIONS} ${TITLE_LAYOUT})`;
@@ -89,13 +89,13 @@ window.__ModuleLoader__.load({
 }
 /* 吸顶标题覆盖正文，层级低于 DSH 的输入区（9）。 */
 [data-dsh-user-title][data-dsh-task-pinned] { z-index: 8; }
-[data-dsh-task-pinned]:not(:has(${TITLE_BODY} > [data-message-attachments] [data-align])) {
+[data-dsh-task-pinned]:not(:has(${TITLE_BODY} > [data-message-attachments])) {
   translate: var(--dsh-task-title-translate);
 }
-[data-dsh-user-title]:not(:has(${TITLE_BODY} > [data-message-attachments] [data-align])) {
+[data-dsh-user-title]:not(:has(${TITLE_BODY} > [data-message-attachments])) {
   padding: 10px var(--dsh-task-title-padding);
 }
-[data-dsh-user-title]:not(:has(${TITLE_BODY} > [data-message-attachments] [data-align])),
+[data-dsh-user-title]:not(:has(${TITLE_BODY} > [data-message-attachments])),
 ${IMAGE_TEXT_LAYOUT}::before {
   background-color: var(--dsw-alias-card-fill);
   border-radius: var(--dsh-task-title-radius);
@@ -158,6 +158,24 @@ ${ACTIVE_TITLE_LAYOUT} > [data-dsh-task-metadata] { opacity: 0; pointer-events: 
   justify-content: flex-start !important;
   align-self: flex-start !important;
 }
+/* 统一标题中单图和多图的缩略图尺寸，保留原生预览和重试操作。 */
+[data-dsh-user-title] [data-message-attachments] [data-align] > button[data-variant],
+[data-submission-echo] [data-message-attachments] [data-align] > button[data-variant] {
+  box-sizing: border-box;
+  width: 96px !important;
+  height: 96px !important;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  aspect-ratio: 1;
+}
+[data-dsh-user-title] [data-message-attachments] [data-align] > button[data-variant] img,
+[data-submission-echo] [data-message-attachments] [data-align] > button[data-variant] img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center !important;
+}
 /* 同一行里文字气泡跟着图片一起靠左。 */
 [data-dsh-user-title] [data-message-bubble],
 [data-submission-echo] [data-message-bubble] {
@@ -168,8 +186,8 @@ ${ACTIVE_TITLE_LAYOUT} > [data-dsh-task-metadata] { opacity: 0; pointer-events: 
 ${IMAGE_LAYOUT} {
   grid-template:
     "before before" auto
-    "attachments attachments" auto
     "text trailing" auto
+    "attachments attachments" auto
     "references references" auto
     / minmax(0, 1fr) auto;
   column-gap: 8px;
@@ -200,7 +218,7 @@ ${IMAGE_TEXT_LAYOUT} > ${TITLE_BODY} > [data-message-bubble] {
 ${IMAGE_LAYOUT} > ${TITLE_BODY} > [data-message-attachments] {
   grid-area: attachments;
   min-width: 0;
-  margin-block-end: 8px;
+  margin-block-start: 8px;
 }
 ${IMAGE_LAYOUT} > ${TITLE_BODY} > :not([data-message-bubble], [data-message-attachments]) {
   grid-area: references;
@@ -581,10 +599,9 @@ ${IMAGE_LAYOUT} > ${TITLE_BODY} > :not([data-message-bubble], [data-message-atta
           const elapsed = echo ? undefined : Number.isFinite(start) && Number.isFinite(end) ? duration(end - start, t)
             : latest ? (clock ?? (stopping ? heldClock.current : undefined)) : undefined;
           const label = t(`state.${phase}`);
-          const detail = phase === 'failed' ? (turn?.end?.data?.reason?.error?.message ?? label) : label;
           return createPortal(h(React.Fragment, null,
             h('span', { className: 'dsh-sp-status-announcement', 'data-phase': phase, role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' }, label),
-            phase !== 'completed' && h('span', { className: CSS_STATUS, 'data-tone': PHASE_TONES[phase], title: detail, 'aria-hidden': 'true' },
+            phase !== 'completed' && h('span', { className: CSS_STATUS, 'data-tone': PHASE_TONES[phase], title: label, 'aria-hidden': 'true' },
               h('span', { className: 'dsh-sp-state-dot' })),
             elapsed !== undefined && h('span', { className: CSS_TIME }, elapsed)), record.host, record.key);
         }));
