@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Project icons and trailing status",
-    "description": "Shows each sidebar session’s project icon and moves its status marker to the trailing edge, keeping timestamps and hover actions from crowding the row."
+    "description": "Shows project icons and trailing session status in the sidebar. Hover over a session title for its project name and path. Resize the sidebar down to 176 px."
   }
 }

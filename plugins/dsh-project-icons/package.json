@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-project-icons",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "type": "module",
   "exports": {
@@ -26,9 +26,10 @@
       "platform": "web",
       "immediately": true,
       "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
   },
-  "description": "Show sidebar project icons and align session status markers to the trailing edge."
+  "description": "Show project icons and details in the sidebar, align session status to the trailing edge, and allow a narrower sidebar."
 }

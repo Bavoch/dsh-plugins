@@ -1,6 +1,0 @@
-{
-  "meta": {
-    "title": "Project in the title tooltip",
-    "description": "Hovering a conversation title shows the project it belongs to, with the name and the full path."
-  }
-}

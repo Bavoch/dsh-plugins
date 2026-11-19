@@ -21,11 +21,14 @@ import { findProjectIcon } from './icon-finder.js';
 /** Cordis plugin name, matching the package name in the profile patch. */
 const name = '@local/dsh-project-icons';
 
-/** The authenticated Fetch channel and the Workspace registry are both required. */
-const inject = ['connection', 'workspaceRegistry'];
+/** The icon routes use authenticated Fetch, workspace ownership, and session metadata. */
+const inject = ['connection', 'workspaceRegistry', 'sessionPersistence'];
 
 /** Exact Fetch route served on the `/api` channel. */
 const ROUTE_PATH = '/api/project-icon';
+
+/** Resolve a session's registered workspace when the client only has its ID. */
+const SESSION_ROUTE_PATH = '/api/session-icon';
 
 /** How long a discovered icon path is reused before the directory is scanned again. */
 const CACHE_MS = 60_000;
@@ -65,8 +68,8 @@ function ownedProjectPath(registry, requested) {
 }
 
 /**
- * Plugin entry: register the authenticated icon route.
- * @param ctx - Host context carrying `connection` and `workspaceRegistry`.
+ * Plugin entry: register the authenticated icon routes.
+ * @param ctx - Host context carrying connection, workspaceRegistry, and sessionPersistence.
  */
 function apply(ctx) {
   /** Discovery results by project path, so row bursts scan once per minute. */
@@ -92,14 +95,13 @@ function apply(ctx) {
    * @param request - an admitted Fetch request on the `/api` channel.
    * @returns the icon bytes, or a 404/405/500 response.
    */
-  const handle = async (request) => {
+  const handle = (resolvePath) => async (request) => {
     try {
       if (request.method !== 'GET' && request.method !== 'HEAD') {
         return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
       }
 
-      const url = new URL(request.url);
-      const projectPath = ownedProjectPath(ctx.workspaceRegistry, url.searchParams.get('path') ?? '');
+      const projectPath = await resolvePath(new URL(request.url).searchParams, request.signal);
       if (projectPath === undefined) return new Response(null, { status: 404 });
 
       const iconPath = await locate(projectPath);
@@ -125,8 +127,20 @@ function apply(ctx) {
     path: ROUTE_PATH,
     methods: ['GET', 'HEAD'],
     requestBody: 'buffered',
-    fetch: handle,
+    fetch: handle(async (params) => ownedProjectPath(ctx.workspaceRegistry, params.get('path') ?? '')),
   }), 'project-icons: icon route');
+
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: SESSION_ROUTE_PATH,
+    methods: ['GET', 'HEAD'],
+    requestBody: 'buffered',
+    fetch: handle(async (params, signal) => {
+      const sessionId = params.get('session');
+      if (sessionId === null || !/^[A-Za-z0-9-]+$/u.test(sessionId)) return undefined;
+      const session = await ctx.sessionPersistence.stat(sessionId, { signal });
+      return ownedProjectPath(ctx.workspaceRegistry, session?.header.cwd);
+    }),
+  }), 'project-icons: session icon route');
 }
 
 export { apply, inject, name };

@@ -1,10 +1,14 @@
 /**
- * Client half, three jobs on the sidebar session list:
+ * Client half, project identity and status in the sidebar:
  *
  *  1. Keep a project icon in front of every session row, in every state.
  *  2. Move the row's status marker to the trailing edge.
  *  3. Hide the relative time while that row shows a status marker, and hide the
  *     marker itself while the row is hovered (the hover strip takes its place).
+ *  4. Paint the same project icon into the workspace (project) row, in place of
+ *     the shipped folder glyph, so a project is identified by its own artwork
+ *     rather than by a generic folder.
+ *  5. Show the session's project name and path in its native hover card.
  *
  * Why the icon is painted here at all: `ui-workspace` renders the row's leading
  * cell as an either/or —
@@ -36,9 +40,63 @@
  */
 window.__ModuleLoader__.load({
   id: '@local/dsh-project-icons',
-  factory() {
+  factory(require) {
+    const { createElement: h } = require('react');
+    const { IconFolderCloseRegular } = require('@deepseek-ai/dsh-client-ui-primitives');
+    const LOCALE = 'project-icons';
+    const HOVER_SLOT = 'sidebar.session.row.hover';
+    const SIDEBAR_HANDLE = '[data-side="sidebar"]';
+    const SIDEBAR_MIN_WIDTH = 176;
+    const SIDEBAR_SIZE = `[data-dsh-sidebar-size]:has(> ${SIDEBAR_HANDLE})`;
+
+    function workspaceForSession(workspaces, sessionId) {
+      return workspaces.items.find((item) => item.sessionIds.includes(sessionId));
+    }
+
+    function ProjectLine({ sessionId, useWorkspaces, t }) {
+      const workspaces = useWorkspaces((snapshot) => snapshot);
+      const workspace = workspaceForSession(workspaces, sessionId);
+      if (workspace === undefined) return null;
+
+      const trimmedPath = workspace.path.replace(/[/\\]+$/, '');
+      const lastSeparator = Math.max(trimmedPath.lastIndexOf('/'), trimmedPath.lastIndexOf('\\'));
+      const projectName = trimmedPath.slice(lastSeparator + 1);
+      return h('div', { className: 'dsh-hover-project', title: workspace.path }, [
+        h(IconFolderCloseRegular, { key: 'icon', size: 14 }),
+        h('span', { key: 'name', className: 'dsh-hover-project-name' }, projectName),
+        h('span', { key: 'role', className: 'dsh-hover-project-role' }, t('tip.project')),
+      ]);
+    }
+
+    /**
+     * The Host asset route, as an absolute URL.
+     *
+     * A page whose own route is not the site root would resolve `/api/...`
+     * against the wrong base and the request would never reach the Host, so the
+     * path is anchored to the origin the page was served from.
+     * @param pathname - one registered Host route.
+     * @param query - its query string, without the leading `?`.
+     * @returns the absolute URL to fetch.
+     */
+    const hostUrl = (pathname, query) => `${window.location.origin}${pathname}?${query}`;
+
     const ROUTE = '/api/project-icon';
+    /**
+     * The route used while a row's directory is still unknown.
+     *
+     * The session catalog already names every Session's directory, but a step
+     * refresh may deliver a page whose rows have no owning project yet. This
+     * route resolves the directory from the persisted Session log instead, so a
+     * row keeps real artwork rather than falling back to the letter tile. The
+     * two routes only differ in how the directory is found, so both are served
+     * by the same Host handler.
+     */
+    const SESSION_ROUTE = '/api/session-icon';
     const ROW = '[role="treeitem"][data-row-key^="session:"]';
+    /** One workspace (project) row; its leading cell holds the folder glyph. */
+    const WORKSPACE_ROW = '[role="treeitem"][data-row-key^="workspace:"]';
+    /** Presence marks a workspace row whose leading cell shows real artwork. */
+    const WORKSPACE_ARTWORK = 'data-workspace-icon';
 
     /**
      * The stylesheet.
@@ -48,6 +106,17 @@ window.__ModuleLoader__.load({
      * holds a status marker it moves to the end and regains its width there.
      */
     const STYLESHEET = `
+${SIDEBAR_SIZE} {
+  grid-template-columns: var(--dsh-sidebar-width) var(--dsh-sidebar-other-tracks) !important;
+}
+html[data-windows-titlebar] ${SIDEBAR_SIZE} {
+  --dsh-windows-sidebar-width: var(--dsh-sidebar-width) !important;
+}
+${SIDEBAR_SIZE} > ${SIDEBAR_HANDLE} { left: var(--dsh-sidebar-width) !important; }
+${SIDEBAR_SIZE} > * > [data-slot="sidebar"] > div { width: var(--dsh-sidebar-width) !important; }
+[data-dsh-sidebar-resizing],
+[data-dsh-sidebar-resizing] > ${SIDEBAR_HANDLE} { transition: none !important; }
+
 ${ROW} {
   --rsr-icon-size: 16px;
   --rsr-icon-gap: 6px;
@@ -136,6 +205,50 @@ ${ROW}::before {
   z-index: 3;
   user-select: none;
 }
+
+/* The workspace (project) row already reserves a 16px folder cell at its own
+   indented start, so the project's artwork is painted into that cell instead of
+   opening a second gutter: the row keeps its geometry, and the shipped hover
+   swap to the expand chevron still owns exactly the same cell. The cell is
+   addressed structurally (first child of the row) because ui-workspace's class
+   names are hashed and change whenever that package is rebuilt. */
+${WORKSPACE_ROW}[${WORKSPACE_ARTWORK}] > :first-child {
+  background-image: var(--wsr-url, none);
+  background-size: 16px 16px;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* The shipped folder glyph would otherwise draw on top of the artwork. */
+${WORKSPACE_ROW}[${WORKSPACE_ARTWORK}] > :first-child > svg { display: none !important; }
+
+.dsh-hover-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #cfd3d6;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.dsh-hover-project > svg {
+  flex: none;
+  opacity: 0.8;
+}
+
+.dsh-hover-project-name {
+  min-width: 0;
+  color: #ffffff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dsh-hover-project-role {
+  flex: none;
+  color: #adb2b8;
+}
 `;
 
     /** First character of a project name, used when it has no icon. */
@@ -145,7 +258,7 @@ ${ROW}::before {
     };
 
     /** The icon URL the Host serves for one project directory. */
-    const iconUrl = (projectPath) => `${ROUTE}?path=${encodeURIComponent(projectPath)}`;
+    const iconUrl = (projectPath) => hostUrl(ROUTE, `path=${encodeURIComponent(projectPath)}`);
 
     /**
      * A stable, well-spread colour for a project's letter tile.
@@ -203,8 +316,115 @@ ${ROW}::before {
         : `hsl(${hue} 70% 22%)`; /* deep, vivid shade of the same hue */
     };
 
+    function installSidebarResize(ctx) {
+      const listeners = new AbortController();
+      let sizing;
+      let drag;
+      let pendingFrame = 0;
+
+      const nativeTracks = frame => /^(\d+(?:\.\d+)?)px\s+(.+)$/.exec(frame.style.gridTemplateColumns);
+      const clearWidth = frame => {
+        if (!frame.hasAttribute('data-dsh-sidebar-size')) return;
+        frame.removeAttribute('data-dsh-sidebar-size');
+        frame.style.removeProperty('--dsh-sidebar-width');
+        frame.style.removeProperty('--dsh-sidebar-other-tracks');
+      };
+      const syncWidth = () => {
+        if (!sizing) return;
+        const { frame, layout, width, nativeWidth } = sizing;
+        if (!frame.isConnected || (!drag && layout.getSnapshot().layoutInfo.sidebar !== nativeWidth)) {
+          observer.disconnect();
+          clearWidth(frame);
+          sizing = undefined;
+          return;
+        }
+        const tracks = nativeTracks(frame);
+        if (!tracks || Number(tracks[1]) === width) {
+          clearWidth(frame);
+          return;
+        }
+        const cssWidth = `${width}px`;
+        if (frame.style.getPropertyValue('--dsh-sidebar-width') !== cssWidth) {
+          frame.style.setProperty('--dsh-sidebar-width', cssWidth);
+        }
+        if (frame.style.getPropertyValue('--dsh-sidebar-other-tracks') !== tracks[2]) {
+          frame.style.setProperty('--dsh-sidebar-other-tracks', tracks[2]);
+        }
+        frame.toggleAttribute('data-dsh-sidebar-size', true);
+      };
+      const observer = new MutationObserver(syncWidth);
+
+      const resizeTo = x => {
+        if (!drag || !sizing) return;
+        const requestedWidth = Math.max(SIDEBAR_MIN_WIDTH, Math.round(drag.startWidth + x - drag.startX));
+        if (requestedWidth === sizing.width) return;
+        sizing.layout.actions.setSidebar(requestedWidth);
+        sizing.nativeWidth = sizing.layout.getSnapshot().layoutInfo.sidebar;
+        sizing.width = Math.min(requestedWidth, sizing.nativeWidth);
+        syncWidth();
+      };
+      const endDrag = () => {
+        if (!drag) return;
+        const { frame, handle, pointerId } = drag;
+        drag = undefined;
+        cancelAnimationFrame(pendingFrame);
+        pendingFrame = 0;
+        if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+        frame.removeAttribute('data-dsh-sidebar-resizing');
+        syncWidth();
+      };
+      const startDrag = event => {
+        if (drag || event.button !== 0 || event.defaultPrevented) return;
+        const handle = event.target instanceof Element ? event.target.closest(SIDEBAR_HANDLE) : null;
+        const frame = handle?.parentElement;
+        if (!frame?.querySelector(':scope > [data-shell-bottom]') || !nativeTracks(frame)) return;
+        // The root registration exposes the same bound layout store used by DSH's handle.
+        const entry = ctx.slots.entries('root').find(({ options }) => options.children?.sidebar && options.children?.rightbar);
+        const layout = entry?.options.store?.create?.();
+        if (typeof layout?.actions?.setSidebar !== 'function' || typeof layout.getSnapshot !== 'function') return;
+        const width = parseFloat(getComputedStyle(frame).gridTemplateColumns);
+        if (!Number.isFinite(width) || width <= 0) return;
+
+        handle.setPointerCapture(event.pointerId);
+        event.preventDefault();
+        event.stopPropagation();
+        if (sizing && sizing.frame !== frame) clearWidth(sizing.frame);
+        sizing = { frame, layout, width, nativeWidth: layout.getSnapshot().layoutInfo.sidebar };
+        drag = { frame, handle, pointerId: event.pointerId, startWidth: width, startX: event.clientX, latestX: event.clientX };
+        observer.disconnect();
+        observer.observe(frame, { attributes: true, attributeFilter: ['style'], childList: true });
+        frame.setAttribute('data-dsh-sidebar-resizing', '');
+      };
+      const moveDrag = event => {
+        if (drag?.pointerId !== event.pointerId) return;
+        drag.latestX = event.clientX;
+        if (pendingFrame) return;
+        pendingFrame = requestAnimationFrame(() => {
+          pendingFrame = 0;
+          if (drag) resizeTo(drag.latestX);
+        });
+      };
+      const finishDrag = event => {
+        if (drag?.pointerId !== event.pointerId) return;
+        if (event.type === 'pointerup') resizeTo(event.clientX);
+        endDrag();
+      };
+      const options = { capture: true, signal: listeners.signal };
+      document.addEventListener('pointerdown', startDrag, options);
+      document.addEventListener('pointermove', moveDrag, options);
+      document.addEventListener('pointerup', finishDrag, options);
+      document.addEventListener('pointercancel', finishDrag, options);
+      document.addEventListener('lostpointercapture', finishDrag, options);
+      return () => {
+        listeners.abort();
+        observer.disconnect();
+        endDrag();
+        if (sizing) clearWidth(sizing.frame);
+      };
+    }
+
     return {
-      inject: ['sessions', 'workspaces'],
+      inject: ['sessions', 'workspaces', 'slots', 'locale'],
       apply(ctx) {
         ctx.effect(() => {
           const style = document.createElement('style');
@@ -212,7 +432,28 @@ ${ROW}::before {
           style.textContent = STYLESHEET;
           document.head.appendChild(style);
           return () => style.remove();
-        }, 'project-icons: row layout stylesheet');
+        }, 'project-icons: sidebar stylesheet');
+
+        ctx.effect(() => installSidebarResize(ctx), 'project-icons: compact sidebar resize');
+
+        ctx.effect(() => {
+          const disposers = [];
+          try {
+            disposers.push(ctx.locale.register(LOCALE, 'zh', { 'tip.project': '项目' }));
+            disposers.push(ctx.locale.register(LOCALE, 'en', { 'tip.project': 'Project' }));
+          } catch (error) {
+            for (const dispose of disposers.reverse()) dispose();
+            throw error;
+          }
+          return () => { for (const dispose of disposers) dispose(); };
+        }, 'project-icons: hover translations');
+
+        ctx.slots.inject(HOVER_SLOT, () => ctx.slots.register({
+          name: HOVER_SLOT,
+          id: 'project',
+          order: 5,
+          locale: LOCALE,
+        }, ProjectLine));
 
         /**
          * Paint each rendered row's project icon through a CSS custom property.
@@ -245,6 +486,27 @@ ${ROW}::before {
             return pending;
           };
 
+          /**
+           * The artwork URL for one Session, resolved Host-side from its log.
+           *
+           * Cached under its own key space so it can never collide with the
+           * per-directory entries above; two Sessions in the same project each
+           * hold their own object URL, which is what makes cleanup exact.
+           * @param sessionId - the Session whose project icon is requested.
+           * @returns a promise of an object URL, or of null when it has no icon.
+           */
+          const sessionArtworkFor = (sessionId) => {
+            const key = `session\u0000${sessionId}`;
+            const hit = iconCache.get(key);
+            if (hit !== undefined) return hit;
+            const pending = fetch(hostUrl(SESSION_ROUTE, `session=${encodeURIComponent(sessionId)}`), { credentials: 'same-origin' })
+              .then((response) => (response.ok ? response.blob() : null))
+              .then((blob) => (blob === null ? null : URL.createObjectURL(blob)))
+              .catch(() => null);
+            iconCache.set(key, pending);
+            return pending;
+          };
+
           /** Quote a string for use as the `content` value of a pseudo-element. */
           const contentString = (text) => `"${String(text).replace(/["\\]/g, '\\$&')}"`;
 
@@ -264,16 +526,15 @@ ${ROW}::before {
             for (const row of document.querySelectorAll(ROW)) {
               const sessionId = (row.getAttribute('data-row-key') ?? '').slice('session:'.length);
               if (sessionId === '') continue;
-              const workspace = workspaces.items.find((item) => item.sessionIds.includes(sessionId));
+              const workspace = workspaceForSession(workspaces, sessionId);
               const summary = sessions.byId[sessionId];
               const projectPath = workspace?.path ?? summary?.cwd;
               const label = workspace?.title ?? summary?.title ?? sessionId;
               const hasPath = projectPath !== undefined && projectPath !== '';
-              // Include the resolved artwork state so a letter-then-artwork swap
-              // reruns once the path becomes known.
-              const signature = `${projectPath ?? ''}\u0000${label}`;
+              const signature = `${sessionId}\u0000${projectPath ?? ''}\u0000${label}`;
 
               if (written.get(row) === signature) continue;
+              written.set(row, signature);
 
               // A row with no known project still gets a letter tile: a freshly
               // opened project settles its Workspace a tick later, and a blank
@@ -284,7 +545,18 @@ ${ROW}::before {
                 const tile = tileColour(projectPath ?? label);
                 row.style.setProperty('--rsr-tile-bg', tile);
                 row.style.setProperty('--rsr-tile-fg', readableOn(tile));
-                written.set(row, signature);
+                // The project is unknown, but the Session is not, and the
+                // Host can read the directory straight from its log. Only after
+                // that also fails does the letter tile stand, so a step refresh
+                // that has not delivered the catalog yet never degrades a row.
+                sessionArtworkFor(sessionId).then((url) => {
+                  if (written.get(row) !== signature || !row.isConnected) return;
+                  if (url === null) return;
+                  row.style.setProperty('--rsr-url', `url("${url}")`);
+                  row.style.setProperty('--rsr-letter', '""');
+                  row.style.setProperty('--rsr-tile-bg', 'transparent');
+                  row.style.removeProperty('--rsr-tile-fg');
+                });
                 continue;
               }
 
@@ -293,8 +565,6 @@ ${ROW}::before {
               row.style.setProperty('--rsr-letter', '""');
               row.style.removeProperty('--rsr-url');
               row.style.setProperty('--rsr-tile-bg', 'transparent');
-              written.set(row, signature);
-
               const pendingSignature = signature;
               artworkFor(projectPath).then((url) => {
                 // The row may have been reused for another project by now.
@@ -311,6 +581,43 @@ ${ROW}::before {
                 row.style.setProperty('--rsr-letter', '""');
                 row.style.setProperty('--rsr-tile-bg', 'transparent');
                 row.style.removeProperty('--rsr-tile-fg');
+              });
+            }
+
+            // Workspace (project) rows: the session loop above keys a row by its
+            // owning project, but a project row instead carries
+            // `workspace:<workspaceId>`, so the registry is consulted directly for
+            // the directory to read artwork from. A row whose workspace has no
+            // known path, or a project without an icon, keeps the shipped folder
+            // glyph untouched.
+            const byWorkspaceId = new Map(
+              workspaces.items.map((item) => [String(item.workspaceId), item]),
+            );
+            for (const row of document.querySelectorAll(WORKSPACE_ROW)) {
+              const workspaceId = (row.getAttribute('data-row-key') ?? '').slice('workspace:'.length);
+              const projectPath = byWorkspaceId.get(workspaceId)?.path;
+              const signature = `workspace\u0000${projectPath ?? ''}`;
+
+              if (written.get(row) === signature) continue;
+              written.set(row, signature);
+
+              if (projectPath === undefined || projectPath === '') {
+                row.removeAttribute(WORKSPACE_ARTWORK);
+                row.style.removeProperty('--wsr-url');
+                continue;
+              }
+
+              const pendingSignature = signature;
+              artworkFor(projectPath).then((url) => {
+                // The row may have been reused for another project by now.
+                if (written.get(row) !== pendingSignature || !row.isConnected) return;
+                if (url === null) {
+                  row.removeAttribute(WORKSPACE_ARTWORK);
+                  row.style.removeProperty('--wsr-url');
+                  return;
+                }
+                row.style.setProperty('--wsr-url', `url("${url}")`);
+                row.setAttribute(WORKSPACE_ARTWORK, '');
               });
             }
           };
@@ -358,6 +665,10 @@ ${ROW}::before {
             stopSessions();
             stopWorkspaces();
             for (const row of document.querySelectorAll(ROW)) clearRow(row);
+            for (const row of document.querySelectorAll(WORKSPACE_ROW)) {
+              row.removeAttribute(WORKSPACE_ARTWORK);
+              row.style.removeProperty('--wsr-url');
+            }
             for (const pending of iconCache.values()) {
               pending.then((url) => { if (url !== null) URL.revokeObjectURL(url); }).catch(() => {});
             }
