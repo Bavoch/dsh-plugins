@@ -1,6 +1,6 @@
 {
   "name": "@local/dsh-shared-rightbar",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "description": "Keep the right sidebar open or collapsed with the same tabs when changing sessions in a workspace.",
@@ -10,13 +10,15 @@
   "exports": {
     ".": "./index.js",
     "./client": "./client.js",
-    "./locale/*.json": "./locale/*.json"
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
   },
   "files": [
     "index.js",
     "client.js",
     "cordis.patch.yml",
     "locale/*.json",
+    "icon.svg",
     "README.md"
   ],
   "dsh": {
