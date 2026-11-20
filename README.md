@@ -1,6 +1,6 @@
 # DeepSeek Harness 社区插件
 
-为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供的 6 个独立插件，涵盖侧栏、会话、任务状态和额度显示。初版的批量安装曾在 DeepSeek Harness Desktop `0.2.2-rc.3` 验证。
+为 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 提供的独立插件，涵盖侧栏、会话、任务状态和额度显示。
 
 | 插件 | 功能 |
 | --- | --- |
@@ -10,12 +10,13 @@
 | `dsh-concise-replies` | 精炼的结果回复及输入框中的下一步建议 |
 | `dsh-running-prompt-status` | 对话按轮滚动翻页，当前轮标题显示状态和用时 |
 | `dsh-queue-expanded` | 展开排队中的消息 |
+| [`dsh-shared-rightbar`](plugins/dsh-shared-rightbar/README.md) | 同一工作区的会话共用右侧面板，适用于 `0.2.2-rc.5` |
 
 ## 安装到另一台设备
 
 克隆仓库，或从 GitHub 下载 ZIP 并解压。打开 DSH 的「插件 → 添加插件」，填入 `plugins` 下所需插件目录的绝对路径。安装完成后启用。
 
-如果使用 macOS 终端，先在 DSH 应用菜单的「管理 dsh 命令」安装命令行工具。打开过 DSH 桌面版并完全退出后，可以批量安装。
+如果使用 macOS 终端，先在 DSH 应用菜单的「管理 dsh 命令」安装命令行工具。打开过 DSH 桌面版并完全退出后，可以批量安装。如果当前版本与表中的个别插件不兼容，请指定要安装的插件目录。
 
 ```sh
 git clone https://github.com/Bavoch/dsh-plugins.git

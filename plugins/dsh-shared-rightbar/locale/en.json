@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Shared Right Sidebar",
+    "description": "Keep the sidebar's open or collapsed state, tabs, and terminals when creating or switching sessions in a workspace."
+  }
+}

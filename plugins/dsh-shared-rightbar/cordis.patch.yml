@@ -1,0 +1,3 @@
+- insert:
+    - id: shared-rightbar
+      name: '@local/dsh-shared-rightbar'
