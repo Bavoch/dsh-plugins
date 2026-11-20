@@ -1,0 +1,38 @@
+{
+  "name": "@local/dsh-preview-element-context",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Pick an element in the desktop Browser preview and quote it in the current conversation.",
+  "engines": {
+    "dsh": "0.2.2-rc.5"
+  },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-browser"
+      ]
+    }
+  }
+}

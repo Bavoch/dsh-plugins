@@ -13,12 +13,26 @@ window.__ModuleLoader__.load({
 
     const STYLE = `
 [data-dsh-next-task-visible] [data-composer-placeholder] { visibility: hidden; }
+/* Let the suggestion and editor share a row so wrapping expands the input only as needed. */
+[data-input-scroll] > :has(> .dsh-nt-placeholder) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+[data-input-scroll] > :has(> .dsh-nt-placeholder) > :is([data-composer-input], .dsh-nt-placeholder) {
+  grid-area: 1 / 1;
+}
 .dsh-nt-placeholder {
-  position: absolute; inset: 4px 8px auto 14px; display: flex; align-items: baseline; gap: 10px;
+  position: relative; align-self: start; padding: 4px 8px 0 14px;
   color: var(--dsw-alias-label-caption); pointer-events: none; user-select: none;
 }
-.dsh-nt-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dsh-nt-key { flex: none; font-size: 11px; font-style: normal; opacity: .85; }
+.dsh-nt-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
 [data-composer-input][data-composer-composing] ~ .dsh-nt-placeholder { visibility: hidden; }
 
 .dsh-plain-step {
@@ -40,6 +54,9 @@ window.__ModuleLoader__.load({
 }
 .dsh-plain-step__action:is(:hover, :focus-visible) { text-decoration: underline; }
 .dsh-plain-step__children { display: grid; gap: 4px; margin: 4px 0 0; padding-inline-start: 1.25em; }
+[data-chat-flow-kind="tool-call"]:has(> [data-slot="conversation.chat.node"] > [data-dsh-merged-step]) {
+  display: none;
+}
 
 /* The native compact group title can include the live tool argument summary. */
 [data-step-process] {
@@ -82,6 +99,12 @@ window.__ModuleLoader__.load({
       subagent: 'delegate', subagent_fork: 'delegate', wait_agent: 'wait',
       ask_user_question: 'question',
     }));
+    const routineActions = new Set(['find', 'read', 'research']);
+    const stepGroups = new WeakMap();
+
+    function toolAction(block) {
+      return actions.get('kind' in block ? block.call?.name : block.name) ?? 'work';
+    }
 
     function stepState(block) {
       if (!('kind' in block)) return block.phase === 'preparing' ? 'preparing' : 'running';
@@ -95,9 +118,8 @@ window.__ModuleLoader__.load({
     }
 
     function Operation({ block, canAnswer, showQuestion, t }) {
-      const name = 'kind' in block ? block.call?.name : block.name;
       const state = stepState(block);
-      const action = actions.get(name) ?? 'work';
+      const action = toolAction(block);
       const label = canAnswer(block.callId)
         ? h('button', {
           type: 'button', className: 'dsh-plain-step__action', onClick: () => showQuestion(block.callId),
@@ -110,14 +132,77 @@ window.__ModuleLoader__.load({
             h(Operation, { block: child, canAnswer, showQuestion, t })))));
     }
 
-    function WorkStep({ node, useProjection, showQuestion, t }) {
+    function isRoutine(block, canAnswer) {
+      const state = stepState(block);
+      return routineActions.has(toolAction(block)) && state !== 'issue' && state !== 'stopped'
+        && !block.subCalls?.length && !canAnswer(block.callId);
+    }
+
+    function isReasoningOnly(node) {
+      return node.kind === 'assistant-step' && node.data.blocks.every(block =>
+        block.kind === 'reasoning' || block.kind === 'tool-call' || (block.kind === 'text' && !block.text.trim()));
+    }
+
+    function groupRoutineSteps(nodes, keys, canAnswer) {
+      const groups = new Map();
+      let group;
+      for (const key of keys) {
+        const node = nodes.get(key);
+        if (!node || node.visibility === 'hidden' || isReasoningOnly(node)) continue;
+        const block = node.kind === 'tool-call' && node.data.root;
+        if (!block || node.groupTree || !isRoutine(block, canAnswer)) {
+          group = undefined;
+          continue;
+        }
+        group ??= { first: key, size: 0, actions: new Set(), state: undefined };
+        group.size += 1;
+        group.actions.add(toolAction(block));
+        const state = stepState(block);
+        if (state === 'running' || group.state === undefined) group.state = state;
+        groups.set(key, group);
+      }
+      return groups;
+    }
+
+    function RoutineWorkStep({ node, turn, useChat, questions, ...operation }) {
+      const nodes = useChat(snapshot => snapshot.nodes);
+      const keys = useChat(snapshot => snapshot.locations.getTurn(turn));
+      const tools = nodes.turnDataSource(turn, 'tool-call');
+      const replies = nodes.turnDataSource(turn, 'assistant-step');
+      const toolData = React.useSyncExternalStore(tools.subscribe, tools.getSnapshot);
+      const replyData = React.useSyncExternalStore(replies.subscribe, replies.getSnapshot);
+
+      // The native sources are shared by all tool rows in a turn.
+      let cached = stepGroups.get(tools);
+      if (cached?.keys !== keys || cached?.toolData !== toolData || cached?.replyData !== replyData
+        || cached?.questions !== questions) {
+        cached = { keys, toolData, replyData, questions, groups: groupRoutineSteps(nodes, keys, operation.canAnswer) };
+        stepGroups.set(tools, cached);
+      }
+      const group = cached.groups.get(node.key);
+      if (!group || group.size === 1) return h(Operation, operation);
+      if (group.first !== node.key) return h('span', { 'data-dsh-merged-step': '', hidden: true });
+
+      const { block, t } = operation;
+      const labels = [...group.actions].map(action => t(`action.${action}`));
+      if (group.state) labels.push(t(`step.${group.state}`));
+      return h('div', { 'data-chat-anchor-key': `call:${block.callId}`, 'data-chat-call-id': block.callId },
+        h(StepText, { state: group.state }, labels.join(' · ')));
+    }
+
+    function WorkStep({ node, useChat, useProjection, showQuestion, t }) {
       const questions = useProjection('userQuestions', view => view?.active);
-      return h(Operation, {
+      const operation = {
         block: node.data.root,
         canAnswer: id => questions?.some(question => question.callId === id) ?? false,
         showQuestion,
         t,
-      });
+      };
+      const turn = node.location?.turn?.turn;
+      if (turn === undefined || !useChat || node.groupTree || !isRoutine(operation.block, operation.canAnswer)) {
+        return h(Operation, operation);
+      }
+      return h(RoutineWorkStep, { node, turn, useChat, questions, ...operation });
     }
 
     function RetryNotice({ node, t }) {
@@ -241,8 +326,7 @@ window.__ModuleLoader__.load({
           className: 'dsh-nt-placeholder', 'data-dsh-next-task': hint.text, title: hint.text,
           id: descriptionId,
         }, h('span', { style: { position: 'absolute', width: '1px', height: '1px', overflow: 'hidden', clipPath: 'inset(50%)' } }, t('nextTask.description') + ': '),
-        h('span', { className: 'dsh-nt-text' }, hint.text),
-        h('span', { className: 'dsh-nt-key' }, t('nextTask.accept'))), dom.target));
+        h('span', { className: 'dsh-nt-text' }, hint.text)), dom.target));
     }
 
     function UnfinishedResult({ turn, t }) {
@@ -292,7 +376,6 @@ window.__ModuleLoader__.load({
               'step.retry': '暂时遇到问题，正在重试',
               'step.signIn': '账号已退出，请重新登录后继续。',
               'nextTask.description': 'AI 建议的下一步任务',
-              'nextTask.accept': 'Tab 采用',
             }));
             disposers.push(ctx.locale.register(NS, 'en', {
               stopped: 'The task was stopped before the result was confirmed. Earlier changes may already be in effect.',
@@ -318,7 +401,6 @@ window.__ModuleLoader__.load({
               'step.retry': 'Retrying after a temporary problem',
               'step.signIn': 'Sign back in to continue.',
               'nextTask.description': 'AI-suggested next task',
-              'nextTask.accept': 'Tab to use',
             }));
           } catch (error) {
             for (const dispose of disposers.reverse()) dispose();

@@ -1,0 +1,24 @@
+{
+  "name": "@local/dsh-plugin-publisher",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Manage and publish your DeepSeek Harness plugins to GitHub Releases.",
+  "engines": { "dsh": "0.2.2-rc.5" },
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "publisher.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg", "README.md"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-ui-plugin-manager"]
+    }
+  }
+}

@@ -1,0 +1,3 @@
+- insert:
+    - id: preview-element-context
+      name: '@local/dsh-preview-element-context'

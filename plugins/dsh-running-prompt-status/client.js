@@ -9,6 +9,7 @@ window.__ModuleLoader__.load({
     const TRANSCRIPT_ECHO = '[data-submission-echo]:not([data-pending-steering])';
     const MESSAGE_SELECTOR = `[data-chat-flow-kind="user"][data-chat-turn], ${TRANSCRIPT_ECHO}`;
     const TURN_ROW = '[data-chat-flow-kind], [data-chat-group-key], [data-submission-echo], [data-pending-steering], [data-chat-running]';
+    const WORK_SUMMARY_ROW = '[data-chat-flow-kind="turn-process"], [data-step-process]';
     const TITLE_INSET = 8;
     const IMAGE_ATTACHMENTS = '[data-message-attachments]';
     const TITLE_LAYOUT = '[data-dsh-task-title-layout]';
@@ -32,6 +33,19 @@ window.__ModuleLoader__.load({
   overflow-anchor: none;
   scroll-behavior: auto;
   scrollbar-gutter: stable;
+}
+[data-slot="main.conversation"] :is([data-conversation-scroll], [data-dsh-turn-viewport]) {
+  scrollbar-width: none;
+  scrollbar-gutter: auto;
+}
+[data-slot="main.conversation"] [data-conversation-scroll] {
+  margin-right: 0;
+}
+[data-slot="main.conversation"] [data-conversation-scroll]:has([data-conversation-composer-overlay]) > [data-composer-seat] {
+  right: 0;
+}
+[data-slot="main.conversation"] :is([data-conversation-scroll], [data-dsh-turn-viewport])::-webkit-scrollbar {
+  display: none;
 }
 [data-dsh-turn-viewport] [data-dsh-turn-hidden],
 [data-dsh-turn-viewport] > [data-chat-turn-spacer],
@@ -298,6 +312,7 @@ ${IMAGE_LAYOUT} > ${TITLE_BODY} > :not([data-message-bubble], [data-message-atta
       const newest = timeline.turnOrder.at(-1);
       const heldClock = React.useRef(undefined);
       const syncRef = React.useRef(null);
+      const timelineRef = React.useRef(timeline);
       if (clock !== undefined) heldClock.current = clock;
       React.useEffect(() => { stoppingRef.current = false; setStopping(false); heldClock.current = undefined; }, [sessionId, newest]);
       React.useEffect(() => { if (!session.running || session.promptError?.op === 'stop') { stoppingRef.current = false; setStopping(false); } }, [session.running, session.promptError]);
@@ -539,6 +554,12 @@ ${IMAGE_LAYOUT} > ${TITLE_BODY} > :not([data-message-bubble], [data-message-atta
           root.toggleAttribute('data-dsh-turn-root', paging);
           frame.toggleAttribute('data-dsh-turn-frame', paging);
           const nextHidden = new Set(pages.flatMap(page => page === selected ? [] : page.rows));
+          const turn = typeof selected?.key === 'string' ? timelineRef.current.turns.get(Number(selected.key)) : undefined;
+          if (turn?.end?.data.reason.kind === 'completed') {
+            for (const row of selected.rows) {
+              if (row.matches(WORK_SUMMARY_ROW)) nextHidden.add(row);
+            }
+          }
           if (history && index > 0) nextHidden.add(history);
           updateHiddenRows(nextHidden);
           if (shownKey !== selectedKey) {
@@ -587,7 +608,10 @@ ${IMAGE_LAYOUT} > ${TITLE_BODY} > :not([data-message-bubble], [data-message-atta
           detachView();
         };
       }, [source, sessionId]);
-      React.useLayoutEffect(() => { syncRef.current?.(); }, [newest, session.pendingSubmissions, session.hasMore, session.loadingOlder, session.historyLoadStatus]);
+      React.useLayoutEffect(() => {
+        timelineRef.current = timeline;
+        syncRef.current?.();
+      }, [timeline, session.pendingSubmissions, session.hasMore, session.loadingOlder, session.historyLoadStatus]);
 
       return h(React.Fragment, null,
         h('span', { ref: setSource, style: { display: 'none' }, 'aria-hidden': 'true' }),

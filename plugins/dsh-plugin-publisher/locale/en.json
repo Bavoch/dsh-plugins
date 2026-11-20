@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin publisher",
+    "description": "Manage your plugins, publish GitHub releases, and view downloads by version."
+  }
+}

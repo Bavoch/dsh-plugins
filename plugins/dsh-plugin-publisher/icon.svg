@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Plugin Publisher">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#525f83"/>
+  <path d="M18.5 34.2V40a4.2 4.2 0 0 0 4.2 4.2h18.6a4.2 4.2 0 0 0 4.2-4.2v-5.8" fill="none" stroke="#ffffff" stroke-width="3.7" stroke-linecap="round"/>
+  <path d="M30.6 17.7a1.9 1.9 0 0 1 2.8 0l5.3 6a1.8 1.8 0 0 1-2.3 2.7l-2.5-1.3v11.4a1.9 1.9 0 0 1-3.8 0V25.1l-2.5 1.3a1.8 1.8 0 0 1-2.3-2.7z" fill="#ffffff"/>
+</svg>

@@ -3,7 +3,9 @@
   "version": "1.1.0",
   "private": true,
   "type": "module",
+  "engines": { "dsh": "0.2.2-rc.5" },
   "exports": {
+    "./package.json": "./package.json",
     ".": "./index.js",
     "./client": "./client.js",
     "./locale/*.json": "./locale/*.json",

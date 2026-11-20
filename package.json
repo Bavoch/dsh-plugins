@@ -1,0 +1,13 @@
+{
+  "name": "dsh-plugins",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "check:release": "node scripts/check-release.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.0"
+  }
+}

@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "Workspace Picker (with Add Workspace)",
+    "title": "Workspace picker with an add-workspace option",
     "description": "Restores the \"Add workspace…\" entry in the new-session workspace picker so a folder can be adopted as a project; the list itself shows existing Workspaces only."
   }
 }
